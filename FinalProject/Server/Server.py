@@ -53,10 +53,7 @@ def fileRequest(fileName: str, client1Sock: socket, client2Sock: socket)->bool:
     print("file sent")
 
     client1Sock.sendall(("EOF").encode('utf-8'))
-
-    #resendTime = 15
-
-    #startTime = time.perf_counter()
+    
     response = client1Sock.recv(2048).decode('utf-8')
     print(response)
     while response.split()[0] != "ACK" or response.split()[1] != fileName:
