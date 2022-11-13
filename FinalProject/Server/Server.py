@@ -53,7 +53,7 @@ def fileRequest(fileName: str, client1Sock: socket, client2Sock: socket)->bool:
     print("file sent")
 
     client1Sock.sendall(("EOF").encode('utf-8'))
-    
+
     response = client1Sock.recv(2048).decode('utf-8')
     print(response)
     while response.split()[0] != "ACK" or response.split()[1] != fileName:
@@ -74,19 +74,36 @@ def main(host1name: str, port1no: int, host2name: str, port2no: int)->None:
     print(f"{host1name} {port1no} {host2name} {port2no}")
 
     server_sock1 = socket(AF_INET, SOCK_STREAM)
+
+    print("test")
+
     server_sock1.bind((host1name, port1no))
+
+    print("test1")
 
     server_sock1.listen()
 
+    print("test2")
+
     client1Sock, client1Addr = server_sock1.accept()
+
+    print("test3")
 
     server_sock2 = socket(AF_INET, SOCK_STREAM)
 
+    print("test4")
+
     server_sock2.bind((host2name, port2no))
+
+    print("test5")
 
     server_sock2.listen()
 
+    print("test6")
+
     client2Sock, client2Addr = server_sock2.accept()
+
+    print("test7")
 
     request = client1Sock.recv(2048).decode('utf-8')
 
@@ -114,4 +131,4 @@ def main(host1name: str, port1no: int, host2name: str, port2no: int)->None:
     client1Sock.close()
 
 if __name__ == "__main__":
-    main("localhost", 6060, "localhost", 8080)
+    main("10.47.200.70", 6060, "10.47.200.70", 8080)
