@@ -1,3 +1,4 @@
+import socket
 from socket import socket, AF_INET, SOCK_STREAM
 import string
 from threading import Thread
@@ -6,21 +7,12 @@ import os
 import sys
 import time
 
-#Server Functions:
-#   Receive request from client 1
-#   Create thread that will handle client 1 request
-#   Thread will check to see if file exists
-#   If file doesn't exist, thread will request file from client 2 and wait to receive it
-#   Thread will transmit file to client 1
-#   Thread will wait for acknowledgement from client 1
-#   Thread will end
-
-def fileRequest(fileName: str, client1Sock: socket, client2Sock: socket)->bool:
+def fileRequest(fileName: str, client1Sock: socket, client2Sock: socket)->None:
     hadFile = True
 
     reqFile = Path(os.path.join(sys.path[0], fileName))
     if not reqFile.is_file():
-        print(f"{fileName} not found")
+        print(f"{fileName} not found, requesting from Client 2")
         hadFile = False
 
         client2Sock.sendall(("REQ " + fileName).encode("utf-8"))
@@ -29,18 +21,18 @@ def fileRequest(fileName: str, client1Sock: socket, client2Sock: socket)->bool:
 
         contents = client2Sock.recv(1024)
         file.write(contents)
-        while sys.getsizeof(contents) >= 1024 and contents.decode("utf-8") != "EOF":
-            print(contents.decode('utf-8'))
-        
+        while sys.getsizeof(contents) >= 1024:
             contents = client2Sock.recv(1024)
             file.write(contents)
 
         file.close()
 
+        print(f"{fileName} downloaded from Client 2")
+
     else:
         print(f"{fileName} found")
         
-    print("sending file")
+    print(f"Sending file {fileName} to Client 1")
     
     file = open(os.path.join(sys.path[0], fileName), "rb")
     contents = file.read(1024)
@@ -50,79 +42,47 @@ def fileRequest(fileName: str, client1Sock: socket, client2Sock: socket)->bool:
 
     file.close()
 
-    print("file sent")
-
-    client1Sock.sendall(("EOF").encode('utf-8'))
+    print(f"{fileName} sent to Client 1")
 
     response = client1Sock.recv(2048).decode('utf-8')
-    print(response)
     while response.split()[0] != "ACK" or response.split()[1] != fileName:
-        print(response)
-        
         response = client1Sock.recv(2048).decode('utf-8')
 
-    #if len(response.split()) > 2:
-        #if "END" in response.split()[2]:
-            #return True
+    print(f"{fileName} acknowledged from Client 1")
 
     if not hadFile:
         os.remove(os.path.join(sys.path[0], fileName))
 
-    return False
-
 def main(host1name: str, port1no: int, host2name: str, port2no: int)->None:
-    print(f"{host1name} {port1no} {host2name} {port2no}")
+    print("Waiting for connections")
 
     server_sock1 = socket(AF_INET, SOCK_STREAM)
-
-    print("test")
-
     server_sock1.bind((host1name, port1no))
-
-    print("test1")
-
     server_sock1.listen()
-
-    print("test2")
 
     client1Sock, client1Addr = server_sock1.accept()
 
-    print("test3")
+    print("Client 1 connected")
 
     server_sock2 = socket(AF_INET, SOCK_STREAM)
-
-    print("test4")
-
     server_sock2.bind((host2name, port2no))
-
-    print("test5")
-
     server_sock2.listen()
-
-    print("test6")
 
     client2Sock, client2Addr = server_sock2.accept()
 
-    print("test7")
+    print("Client 2 connected")
 
     request = client1Sock.recv(2048).decode('utf-8')
 
     while not "END" in request.split()[0]:
-        print(request)
         if(request.split()[0] == "REQ"):
-            print("test")
-            if fileRequest(request.split()[1], client1Sock, client2Sock):
-                print("ending")
-                break
+            print(f"Requested File {request.split()[1]}")
+            fileRequest(request.split()[1], client1Sock, client2Sock)
 
         try:
             request = client1Sock.recv(2048).decode('utf-8')
         except:
             request = "END"
-
-        print(request)
-
-    print(request)
 
     if client2Sock:
         client2Sock.send(("END").encode('utf-8'))
@@ -130,5 +90,14 @@ def main(host1name: str, port1no: int, host2name: str, port2no: int)->None:
 
     client1Sock.close()
 
+    print("Exiting")
+
 if __name__ == "__main__":
-    main("10.47.200.70", 6060, "10.47.200.70", 8080)
+    port1 = int(input("Please input the first client's port: "))
+    port2 = int(input("Please input the second client's port: "))
+
+    #Current Local IP: 192.168.1.39
+
+    ip = input("Please input the local IPv4 address: ")
+
+    main(ip, port1, ip, port2)
