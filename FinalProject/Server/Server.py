@@ -19,8 +19,6 @@ def fileRequest(fileName: str, client1Sock: socket, client2Sock: socket)->None:
         #Sends request (REQ fileName) to client 2
         client2Sock.sendall(("REQ " + fileName).encode("utf-8"))
 
-        file = open(os.path.join(sys.path[0], fileName), "wb")
-
         #Receives 1024 of the file from client 2
         contents = bytearray(client2Sock.recv(1024))
 
@@ -29,8 +27,17 @@ def fileRequest(fileName: str, client1Sock: socket, client2Sock: socket)->None:
         tail = contents[-3:]
         tailStr = tail.decode('utf-8')
 
+        #Checks if the file was found in client 2
+        if tailStr == "ERR":
+            print("File not found, sending error")
+            message = "File not found"
+            client1Sock.sendall((message + "ERR").encode('utf-8'))
+            return
+
         #Removes tail from contents and writes to file
         contents = contents[: len(contents) - 3]
+
+        file = open(os.path.join(sys.path[0], fileName), "wb")
         file.write(contents)
 
         #Loops until the tail is EOF, repeats same code as above
