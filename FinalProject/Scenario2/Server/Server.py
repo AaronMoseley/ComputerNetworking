@@ -88,6 +88,8 @@ def fileRequest(files, primarySock: socket, secondarySock: socket)->None:
         #Begins to send file to client 1
         print(f"Sending file {fileName} to primary client")
         
+        startTime = time.perf_counter()
+
         file = open(os.path.join(sys.path[0], fileName), "rb")
 
         #Logs size of file and starts a counter
@@ -121,6 +123,12 @@ def fileRequest(files, primarySock: socket, secondarySock: socket)->None:
         file.close()
 
         print(f"{fileName} sent to primary client")
+
+        endTime = time.perf_counter()
+
+        uploadRate = fileSize / (endTime - startTime)
+
+        print(f"Upload Rate: {uploadRate} bytes per second")
 
         #Receives acknowledgement from client 1 (ACK fileName)
         response = primarySock.recv(2048).decode('utf-8')
