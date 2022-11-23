@@ -3,17 +3,18 @@ from threading import Thread
 import os
 import sys
 from pathlib import Path
+import time
 
 def primary(conn: socket)->None:
     #Asks for file name as input, loops until user inputs "quit"
     fileNames = input("Please input the name of the files (separated by spaces) you would like to request (or \"quit\" to exit): ")
 
     while fileNames.lower() != "quit":
+        taskStart = time.perf_counter()
         for fileName in fileNames.split():
             #Checks if the file already exists, skips to next iteration if so
             if Path(os.path.join(sys.path[0], fileName)).is_file():
                 print(f"{fileName} already exists")
-                #fileName = input("Please input the name of the file you would like to request (or \"quit\" to exit): ")
                 continue
             
             #Creates request message for server (REQ fileName) and sends it
@@ -22,6 +23,7 @@ def primary(conn: socket)->None:
 
             print(f"Requested {fileName}")
 
+            downloadStart = time.perf_counter()
             #Receives first set of bytes from server
             contents = bytearray(conn.recv(1024))
 
@@ -32,7 +34,6 @@ def primary(conn: socket)->None:
             #Checks if the file was found in the server or client 2, advances if not
             if tailStr == "ERR":
                 print(f"{fileName} not found")
-                #fileName = input("Please input the name of the file you would like to request (or \"quit\" to exit): ")
                 continue
 
             f = open(os.path.join(sys.path[0], fileName), "wb")
@@ -53,12 +54,20 @@ def primary(conn: socket)->None:
 
             f.close()
 
+            downloadEnd = time.perf_counter()
             print(f"Received {fileName}")
+
+            downloadRate = os.path.getsize(os.path.join(sys.path[0], fileName)) / (downloadEnd - downloadStart)
+            print(f"Download Rate: {downloadRate} bytes per second")
 
             #Sends acknowledgement to server (ACK fileName)
             conn.sendall(("ACK " + fileName).encode('utf-8'))
 
             print(f"Acknowledged {fileName}")
+
+        taskEnd = time.perf_counter()
+
+        print(f"Total Task Time: {taskEnd - taskStart} seconds")
 
         #Asks for next iteration's input
         fileNames = input("Please input the name of the file you would like to request (or \"quit\" to exit): ")
