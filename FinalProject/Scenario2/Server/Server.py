@@ -53,14 +53,25 @@ def fileRequest(files, primarySock: socket, secondarySock: socket)->None:
             #Decodes 3-character tail from end of message
             #Tail is either EOF (end of file) or NEF (not end file)
             tail = contents[-3:]
-            tailStr = tail.decode('utf-8')
 
-            #Checks if the file was found in client 2
+            try:
+                tailStr = tail.decode('utf-8')
+            except:
+                tailStr = "NAN"
+
+            while len(contents) < 1024 and tailStr != "NEF" and tailStr != "EOF" and tailStr != "ERR":
+                contents.extend(bytearray(secondarySock.recv(1024 - len(contents))))
+
+                tail = contents[-3:]
+                try:
+                    tailStr = tail.decode('utf-8')
+                except:
+                    tailStr = "NAN"
+
+            #Checks if the file was found in the server or client 2, advances if not
             if tailStr == "ERR":
-                print("File not found, sending error")
-                message = "File not found"
-                primarySock.sendall((message + "ERR").encode('utf-8'))
-                return
+                print(f"{fileName} not found")
+                continue
 
             #Removes tail from contents and writes to file
             contents = contents[: len(contents) - 3]
@@ -73,9 +84,25 @@ def fileRequest(files, primarySock: socket, secondarySock: socket)->None:
                 contents = bytearray(secondarySock.recv(1024))
 
                 tail = contents[-3:]
+                try:
+                    tailStr = tail.decode('utf-8')
+                except:
+                    tailStr = "NAN"
+
+                while len(contents) < 1024 and tailStr != "NEF" and tailStr != "EOF":
+                    contents.extend(bytearray(secondarySock.recv(1024 - len(contents))))
+
+                    tail = contents[-3:]
+                    try:
+                        tailStr = tail.decode('utf-8')
+                    except:
+                        tailStr = "NAN"
+
+                tail = contents[-3:]
                 tailStr = tail.decode('utf-8')
 
                 contents = contents[: len(contents) - 3]
+
                 file.write(contents)
 
             file.close()
