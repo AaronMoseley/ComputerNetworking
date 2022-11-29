@@ -29,7 +29,20 @@ def primary(conn: socket)->None:
 
             #Decodes tail, either NEF (not end file) or EOF (end of file)
             tail = contents[-3:]
-            tailStr = tail.decode('utf-8')
+
+            try:
+                tailStr = tail.decode('utf-8')
+            except:
+                tailStr = "NAN"
+
+            while len(contents) < 1024 and tailStr != "NEF" and tailStr != "EOF" and tailStr != "ERR":
+                contents.extend(bytearray(conn.recv(1024 - len(contents))))
+
+                tail = contents[-3:]
+                try:
+                    tailStr = tail.decode('utf-8')
+                except:
+                    tailStr = "NAN"
 
             #Checks if the file was found in the server or client 2, advances if not
             if tailStr == "ERR":
