@@ -47,9 +47,25 @@ def primary(conn: socket)->None:
                 contents = bytearray(conn.recv(1024))
 
                 tail = contents[-3:]
+                try:
+                    tailStr = tail.decode('utf-8')
+                except:
+                    tailStr = "NAN"
+
+                while len(contents) < 1024 and tailStr != "NEF" and tailStr != "EOF":
+                    contents.extend(bytearray(conn.recv(1024 - len(contents))))
+
+                    tail = contents[-3:]
+                    try:
+                        tailStr = tail.decode('utf-8')
+                    except:
+                        tailStr = "NAN"
+
+                tail = contents[-3:]
                 tailStr = tail.decode('utf-8')
 
                 contents = contents[: len(contents) - 3]
+
                 f.write(contents)
 
             f.close()
