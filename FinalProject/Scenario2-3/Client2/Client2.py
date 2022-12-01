@@ -89,11 +89,6 @@ def primary(conn: socket)->None:
             downloadRate = os.path.getsize(os.path.join(sys.path[0], fileName)) / (downloadEnd - downloadStart)
             print(f"Download Rate: {downloadRate} bytes per second")
 
-            #Sends acknowledgement to server (ACK fileName)
-            conn.sendall(("ACK " + fileName).encode('utf-8'))
-
-            print(f"Acknowledged {fileName}")
-
         taskEnd = time.perf_counter()
 
         print(f"Total Task Time: {taskEnd - taskStart} seconds")
