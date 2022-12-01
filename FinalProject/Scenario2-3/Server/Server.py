@@ -172,6 +172,9 @@ def sendFiles(flaggedFiles, primarySock: socket, secondarySock: socket)->None:
 
         print(f"Upload Rate: {uploadRate} bytes per second")
 
+        if not fileEntry[i][1]:
+            os.remove(os.path.join(sys.path[0], fileEntry[i][0]))
+
 
 
 def main(hostName: str, client1Port1: int, client1Port2: int, client2Port1: int, client2Port2: int)->None:
