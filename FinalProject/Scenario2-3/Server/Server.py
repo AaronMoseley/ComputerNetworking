@@ -171,18 +171,6 @@ def sendFiles(flaggedFiles, primarySock: socket, secondarySock: socket)->None:
         uploadRate = fileSize / (endTime - startTime)
 
         print(f"Upload Rate: {uploadRate} bytes per second")
-    
-    for i, fileEntry in enumerate(flaggedFiles):
-        #Receives acknowledgement from client 1 (ACK fileEntry)
-        response = primarySock.recv(2048).decode('utf-8')
-        while response.split()[0] != "ACK" or response.split()[1] != fileEntry[i][0]:
-            response = primarySock.recv(2048).decode('utf-8')
-
-        print(f"{fileEntry[i][0]} acknowledged from primary client")
-
-        #If file wasn't originally on server, deletes it
-        if not fileEntry[i][1]:
-            os.remove(os.path.join(sys.path[0], fileEntry[i][0]))
 
 
 
