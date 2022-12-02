@@ -101,11 +101,15 @@ def primary(conn: socket)->None:
             fileSize = int(sizes.split()[fileNames.split().index(fileName)])
             fileCounter = 0
 
-            if fileSize == 0:
+            if fileSize == -1:
                 print(f"{fileName} not found")
                 continue
 
             f = open(os.path.join(sys.path[0], fileName), "wb")
+
+            if fileSize == 0:
+                f.close()
+                continue
 
             if len(contents) > 0:
                 f.write(contents)
