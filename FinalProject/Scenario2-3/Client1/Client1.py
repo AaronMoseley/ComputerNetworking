@@ -9,19 +9,109 @@ def primary(conn: socket)->None:
     #Asks for file name as input, loops until user inputs "quit"
     fileNames = input("Please input the name of the files (separated by spaces) you would like to request (or \"quit\" to exit): ")
 
-    while fileNames.lower() != "quit":
-        taskStart = time.perf_counter()
+    if fileNames.lower() != "quit":
         for fileName in fileNames.split():
             #Checks if the file already exists, skips to next iteration if so
             if Path(os.path.join(sys.path[0], fileName)).is_file():
                 print(f"{fileName} already exists")
-                continue
-            
-            #Creates request message for server (REQ fileName) and sends it
-            message = "REQ " + fileName
-            conn.sendall(message.encode('utf-8'))
+                fileNames = fileNames.replace(fileName, "")
 
-            print(f"Requested {fileName}")
+        if len(fileNames.replace(" ", "")) >= 1:
+            message = "REQ " + fileNames
+            conn.sendall(message.encode('utf-8'))
+        else:
+            primary(conn)
+            return
+
+    while fileNames.lower() != "quit":
+        taskStart = time.perf_counter()
+        #Receives first set of bytes from server
+        contents = bytearray(conn.recv(1024))
+
+        #Decodes tail, either NEF (not end file) or EOF (end of file)
+        tail = contents[-3:]
+
+        try:
+            tailStr = tail.decode('utf-8')
+        except:
+            tailStr = "NAN"
+
+        while len(contents) < 1024 and tailStr != "NEF" and tailStr != "EOF" and tailStr != "ERR":
+            contents.extend(bytearray(conn.recv(1024 - len(contents))))
+
+            tail = contents[-3:]
+            try:
+                tailStr = tail.decode('utf-8')
+            except:
+                tailStr = "NAN"
+
+        #Checks if the file was found in the server or client 2, advances if not
+        if tailStr == "ERR":
+            #Asks for next iteration's input
+            fileNames = input("Please input the name of the file you would like to request (or \"quit\" to exit): ")
+
+            if fileNames.lower() == "quit":
+                break
+
+            for fileName in fileNames.split():
+            #Checks if the file already exists, skips to next iteration if so
+                if Path(os.path.join(sys.path[0], fileName)).is_file():
+                    print(f"{fileName} already exists")
+                    fileNames = fileNames.replace(fileName, "")
+
+            if len(fileNames.replace(" ", "")) >= 1:
+                message = "REQ " + fileNames
+                conn.sendall(message.encode('utf-8'))
+            continue
+
+        sizes = ""
+
+        #Removes tail from contents and writes to file
+        contents = contents[: len(contents) - 3]
+        sizes += contents.decode('utf-8')
+
+        #Continues to receive file until tail is "EOF", repeats above code
+        while tailStr != "EOF":
+            contents = bytearray(conn.recv(1024))
+
+            tail = contents[-3:]
+            try:
+                tailStr = tail.decode('utf-8')
+            except:
+                tailStr = "NAN"
+
+            while len(contents) < 1024 and tailStr != "NEF" and tailStr != "EOF":
+                contents.extend(bytearray(conn.recv(1024 - len(contents))))
+
+                tail = contents[-3:]
+                try:
+                    tailStr = tail.decode('utf-8')
+                except:
+                    tailStr = "NAN"
+
+            tail = contents[-3:]
+            tailStr = tail.decode('utf-8')
+
+            contents = contents[: len(contents) - 3]
+
+            sizes += contents.decode('utf-8')
+
+        contents = bytearray([])
+        for fileName in fileNames.split():
+            fileSize = int(sizes.split()[fileNames.split().index(fileName)])
+            fileCounter = 0
+
+            if fileSize == 0:
+                print(f"{fileName} not found")
+                continue
+
+            f = open(os.path.join(sys.path[0], fileName), "wb")
+
+            if len(contents) > 0:
+                f.write(contents)
+                fileCounter += len(contents)
+
+            contents = bytearray([])
 
             downloadStart = time.perf_counter()
             #Receives first set of bytes from server
@@ -35,7 +125,8 @@ def primary(conn: socket)->None:
             except:
                 tailStr = "NAN"
 
-            while len(contents) < 1024 and tailStr != "NEF" and tailStr != "EOF" and tailStr != "ERR":
+            while len(contents) < 1024 and tailStr != "EOF":
+                #print("test1")
                 contents.extend(bytearray(conn.recv(1024 - len(contents))))
 
                 tail = contents[-3:]
@@ -44,19 +135,21 @@ def primary(conn: socket)->None:
                 except:
                     tailStr = "NAN"
 
-            #Checks if the file was found in the server or client 2, advances if not
-            if tailStr == "ERR":
-                print(f"{fileName} not found")
-                continue
-
-            f = open(os.path.join(sys.path[0], fileName), "wb")
-
             #Removes tail from contents and writes to file
             contents = contents[: len(contents) - 3]
-            f.write(contents)
+
+            if len(contents) + fileCounter > fileSize:
+                writeableContents = contents[0:fileSize - fileCounter]
+                contents = contents[fileSize - fileCounter:]
+            else:
+                writeableContents = contents
+                contents = bytearray([])
+
+            fileCounter += len(writeableContents)
+            f.write(writeableContents)
 
             #Continues to receive file until tail is "EOF", repeats above code
-            while tailStr != "EOF":
+            while tailStr != "EOF" and fileCounter < fileSize:
                 contents = bytearray(conn.recv(1024))
 
                 tail = contents[-3:]
@@ -65,7 +158,7 @@ def primary(conn: socket)->None:
                 except:
                     tailStr = "NAN"
 
-                while len(contents) < 1024 and tailStr != "NEF" and tailStr != "EOF":
+                while len(contents) < 1024 and tailStr != "EOF":
                     contents.extend(bytearray(conn.recv(1024 - len(contents))))
 
                     tail = contents[-3:]
@@ -79,7 +172,15 @@ def primary(conn: socket)->None:
 
                 contents = contents[: len(contents) - 3]
 
-                f.write(contents)
+                if len(contents) + fileCounter > fileSize:
+                    writeableContents = contents[0:fileSize - fileCounter]
+                    contents = contents[fileSize - fileCounter:]
+                else:
+                    writeableContents = contents
+                    contents = bytearray([])
+
+                fileCounter += len(writeableContents)
+                f.write(writeableContents)
 
             f.close()
 
@@ -89,12 +190,30 @@ def primary(conn: socket)->None:
             downloadRate = os.path.getsize(os.path.join(sys.path[0], fileName)) / (downloadEnd - downloadStart)
             print(f"Download Rate: {downloadRate} bytes per second")
 
+        #Sends acknowledgement to server (ACK fileName)
+        conn.sendall(("ACK " + fileNames).encode('utf-8'))
+
+        print(f"Acknowledged {fileNames}")
+
         taskEnd = time.perf_counter()
 
         print(f"Total Task Time: {taskEnd - taskStart} seconds")
 
         #Asks for next iteration's input
         fileNames = input("Please input the name of the file you would like to request (or \"quit\" to exit): ")
+
+        if fileNames.lower() == "quit":
+            break
+
+        for fileName in fileNames.split():
+        #Checks if the file already exists, skips to next iteration if so
+            if Path(os.path.join(sys.path[0], fileName)).is_file():
+                fileNames = fileNames.replace(fileName, "")
+
+        if len(fileNames.replace(" ", "")) >= 1:
+            print(fileNames)
+            message = "REQ " + fileNames
+            conn.sendall(message.encode('utf-8'))
 
     #After user inputs "quit", sends message cancelling program to server and closes connection
     message = "END"
