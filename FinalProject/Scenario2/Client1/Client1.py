@@ -9,7 +9,7 @@ def primary(conn: socket)->None:
     #Asks for file name as input, loops until user inputs "quit"
     fileNames = input("Please input the name of the files (separated by spaces) you would like to request (or \"quit\" to exit): ")
 
-    if fileNames != "quit":
+    if fileNames.lower() != "quit":
         for fileName in fileNames.split():
             #Checks if the file already exists, skips to next iteration if so
             if Path(os.path.join(sys.path[0], fileName)).is_file():
@@ -101,7 +101,7 @@ def primary(conn: socket)->None:
         #Asks for next iteration's input
         fileNames = input("Please input the name of the file you would like to request (or \"quit\" to exit): ")
 
-        if fileNames != "quit":
+        if fileNames.lower() != "quit":
             for fileName in fileNames.split():
             #Checks if the file already exists, skips to next iteration if so
                 if Path(os.path.join(sys.path[0], fileName)).is_file():
