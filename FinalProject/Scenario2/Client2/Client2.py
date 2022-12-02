@@ -9,20 +9,19 @@ def primary(conn: socket)->None:
     #Asks for file name as input, loops until user inputs "quit"
     fileNames = input("Please input the name of the files (separated by spaces) you would like to request (or \"quit\" to exit): ")
 
+    for fileName in fileNames.split():
+        #Checks if the file already exists, skips to next iteration if so
+        if Path(os.path.join(sys.path[0], fileName)).is_file():
+            print(f"{fileName} already exists")
+            fileNames = fileNames.replace(fileName, "")
+
+    if len(fileNames.split()) >= 1:
+        message = "REQ " + fileNames
+        conn.sendall(message.encode('utf-8'))
+
     while fileNames.lower() != "quit":
         taskStart = time.perf_counter()
         for fileName in fileNames.split():
-            #Checks if the file already exists, skips to next iteration if so
-            if Path(os.path.join(sys.path[0], fileName)).is_file():
-                print(f"{fileName} already exists")
-                continue
-            
-            #Creates request message for server (REQ fileName) and sends it
-            message = "REQ " + fileName
-            conn.sendall(message.encode('utf-8'))
-
-            print(f"Requested {fileName}")
-
             downloadStart = time.perf_counter()
             #Receives first set of bytes from server
             contents = bytearray(conn.recv(1024))
@@ -100,6 +99,16 @@ def primary(conn: socket)->None:
 
         #Asks for next iteration's input
         fileNames = input("Please input the name of the file you would like to request (or \"quit\" to exit): ")
+
+        for fileName in fileNames.split():
+        #Checks if the file already exists, skips to next iteration if so
+            if Path(os.path.join(sys.path[0], fileName)).is_file():
+                print(f"{fileName} already exists")
+                fileNames = fileNames.replace(fileName, "")
+
+        if len(fileNames.split()) >= 1:
+            message = "REQ " + fileNames
+            conn.sendall(message.encode('utf-8'))
 
     #After user inputs "quit", sends message cancelling program to server and closes connection
     message = "END"
