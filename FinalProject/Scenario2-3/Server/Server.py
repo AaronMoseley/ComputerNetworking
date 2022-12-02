@@ -74,7 +74,7 @@ def fileRequest(files, primarySock: socket, secondarySock: socket)->None:
             if tailStr == "ERR":
                 print(f"{fileName} not found")
                 files.remove(fileName)
-                fileSizes += "0 "
+                fileSizes += "-1 "
                 continue
 
             #Removes tail from contents and writes to file
@@ -189,8 +189,6 @@ def fileRequest(files, primarySock: socket, secondarySock: socket)->None:
                 contents = bytearray([])
 
             file.close()
-
-    print(numSentFiles)
 
     if numSentFiles >= 1:
         print(f"{files} sent to primary client")
