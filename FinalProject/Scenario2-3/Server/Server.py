@@ -1,5 +1,6 @@
 import socket
 from socket import socket, AF_INET, SOCK_STREAM
+import string
 from threading import Thread
 from pathlib import Path
 import os
@@ -12,15 +13,11 @@ def ClientService(primarySock: socket, secondarySock: socket)->None:
 
     #Loops until client 1 cancels program
     while not "END" in request.split()[0]:
-        files = []
         #Calls file request function if a request has been issued
-        #Request Format: REQ file1Name, file2Name...
+        #Request Format: REQ fileName
         if(request.split()[0] == "REQ"):
-            print(f"Requested File {request.split()[1:]}")
-            #Processes one request argument at a time
-            files.append( primeServer(request.split()[1:], primarySock, secondarySock) )
-        
-        sendFiles(files, primarySock, secondarySock)
+            print(f"Requested Files {request.split()[1:]}")
+            fileRequest(request.split()[1:], primarySock, secondarySock)
 
         #Takes in next request, if invalid assumes that the connection has been cancelled
         try:
@@ -37,18 +34,17 @@ def ClientService(primarySock: socket, secondarySock: socket)->None:
     primarySock.close()
 
 
-def primeServer(files, primarySock: socket, secondarySock: socket)->None:
-    #For converting files later
-    filesWithDeleteInfo = []
+def fileRequest(files, primarySock: socket, secondarySock: socket)->None:
+    hadFile = {}
+
+    fileSizes = ""
 
     for fileName in files:
-        #Checks if the file exists on the server, requests from client 2 if it doesn't
-        hadFile = True
         reqFile = Path(os.path.join(sys.path[0], fileName))
 
         if not reqFile.is_file():
             print(f"{fileName} not found, requesting from secondary client")
-            hadFile = False
+            hadFile[fileName] = False
 
             #Sends request (REQ fileName) to client 2
             secondarySock.sendall(("REQ " + fileName).encode("utf-8"))
@@ -77,6 +73,8 @@ def primeServer(files, primarySock: socket, secondarySock: socket)->None:
             #Checks if the file was found in the server or client 2, advances if not
             if tailStr == "ERR":
                 print(f"{fileName} not found")
+                files.remove(fileName)
+                fileSizes += "0 "
                 continue
 
             #Removes tail from contents and writes to file
@@ -115,67 +113,108 @@ def primeServer(files, primarySock: socket, secondarySock: socket)->None:
 
             print(f"{fileName} downloaded from secondary client")
 
+            fileSizes += str(os.path.getsize(os.path.join(sys.path[0], fileName))) + " "
+
         else:
+            hadFile[fileName] = True
+            fileSizes += str(os.path.getsize(os.path.join(sys.path[0], fileName))) + " "
             print(f"{fileName} found")
-        
-        #Files are converted to tuples which also keep track of server ownership status.
-        filesWithDeleteInfo.append( (fileName, hadFile) )
+    
+    #Begins to send file to client 1
+    print(f"Sending {files} to primary client")
+    contents = bytearray([])
+    startTime = time.perf_counter()
+    totalSize = 0
+    numSentFiles = 0
 
-    return filesWithDeleteInfo
+    strCounter = 0
+    while strCounter < len(fileSizes):
+        message = fileSizes[strCounter:strCounter + 1021]
+        strCounter += len(message)
 
-
-def sendFiles(flaggedFiles, primarySock: socket, secondarySock: socket)->None:
-    #Files are now of [(file1Name, hadFile1), (file2Name, hadFile2)...] format
-    for i, fileEntry in enumerate(flaggedFiles):  
-        #Begins to send file to client 1
-        print(f"Sending file {fileEntry[i][0]} to primary client")
-        
-        startTime = time.perf_counter()
-
-        file = open(os.path.join(sys.path[0], fileEntry[i][0]), "rb")
-
-        #Logs size of file and starts a counter
-        fileSize = os.path.getsize(os.path.join(sys.path[0], fileEntry[i][0]))
-        currPos = 0
-
-        #Reads 1021 bytes from file, increments counter, appends NEF or EOF to contents depending on whether the end of file has been reached
-        contents = bytearray(file.read(1021))
-        currPos += len(contents)
-
-        if currPos < fileSize:
-            contents.extend("NEF".encode('utf-8'))
+        if strCounter < len(fileSizes):
+            message += "NEF"
         else:
-            contents.extend("EOF".encode('utf-8'))
+            while len(message) < 1021:
+                message += " "
 
-        #Sends full message to client 1
-        primarySock.sendall(contents)
+            message += "EOF"
 
-        #Loop until counter reaches the total file size, repeat same code as above
-        while currPos < fileSize:
-            contents = bytearray(file.read(1021))
-            currPos += len(contents)
+        primarySock.sendall(message.encode('utf-8'))
 
-            if currPos < fileSize:
-                contents.extend("NEF".encode('utf-8'))
-            else:
+    for fileName in files:
+        if Path(os.path.join(sys.path[0], fileName)).is_file():
+            numSentFiles += 1
+            file = open(os.path.join(sys.path[0], fileName), "rb")
+
+            #Logs size of file and starts a counter
+            fileSize = os.path.getsize(os.path.join(sys.path[0], fileName))
+            totalSize += fileSize
+            currPos = 0
+
+            #Reads 1021 bytes from file, increments counter, appends NEF or EOF to contents depending on whether the end of file has been reached
+            prevLength = len(contents)
+            contents.extend(bytearray(file.read(1021 - len(contents))))
+            currPos += len(contents) - prevLength
+
+            if currPos >= fileSize and fileName != files[-1]:
+                file.close()
+                continue
+
+            if fileName == files[-1] and currPos >= fileSize:
                 contents.extend("EOF".encode('utf-8'))
+            else:
+                contents.extend("NEF".encode('utf-8'))
 
-            primarySock.sendall(contents)
+            #Sends full message to client 1
+            primarySock.sendall(bytearray(contents))
+            contents = bytearray([])
 
-        file.close()
+            #Loop until counter reaches the total file size, repeat same code as above
+            while currPos < fileSize:
+                prevLength = len(contents)
+                contents.extend(bytearray(file.read(1021 - len(contents))))
+                currPos += len(contents) - prevLength
 
-        print(f"{fileEntry[i][0]} sent to primary client")
+                if currPos >= fileSize and fileName != files[-1]:
+                    file.close()
+                    continue
 
-        endTime = time.perf_counter()
+                if fileName == files[-1] and currPos >= fileSize:
+                    contents.extend("EOF".encode('utf-8'))
+                else:
+                    contents.extend("NEF".encode('utf-8'))
 
-        uploadRate = fileSize / (endTime - startTime)
+                primarySock.sendall(bytearray(contents))
+                contents = bytearray([])
 
-        print(f"Upload Rate: {uploadRate} bytes per second")
+            file.close()
 
-        if not fileEntry[i][1]:
-            os.remove(os.path.join(sys.path[0], fileEntry[i][0]))
+    print(numSentFiles)
 
+    if numSentFiles >= 1:
+        print(f"{files} sent to primary client")
+    else:
+        message = "Files not foundERR"
+        primarySock.sendall(message.encode('utf-8'))
 
+    endTime = time.perf_counter()
+
+    uploadRate = totalSize / (endTime - startTime)
+
+    print(f"Upload Rate: {uploadRate} bytes per second")
+
+    #Receives acknowledgement from client 1 (ACK fileName)
+    response = primarySock.recv(2048).decode('utf-8')
+    while response.split()[0] != "ACK":
+        response = primarySock.recv(2048).decode('utf-8')
+
+    print(f"{files} acknowledged from primary client")
+
+    for fileName in files:
+        #If file wasn't originally on server, deletes it
+        if not hadFile[fileName]:
+            os.remove(os.path.join(sys.path[0], fileName))
 
 def main(hostName: str, client1Port1: int, client1Port2: int, client2Port1: int, client2Port2: int)->None:
     print("Waiting for connections")
